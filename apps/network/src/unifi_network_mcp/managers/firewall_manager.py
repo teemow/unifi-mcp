@@ -528,13 +528,13 @@ class FirewallManager:
 
         Args:
             rule_data: Dictionary containing the rule configuration. Expected keys:
-                       name (str), dst_port (str), fwd_port (str), fwd_ip (str),
+                       name (str), dst_port (str), fwd_port (str), fwd (str),
                        protocol (str, optional), enabled (bool, optional), etc.
 
         Returns:
             The created rule data dict, or None if creation failed.
         """
-        required_keys = {"name", "dst_port", "fwd_port", "fwd_ip"}
+        required_keys = {"name", "dst_port", "fwd_port", "fwd"}
         if not required_keys.issubset(rule_data.keys()):
             missing = required_keys - rule_data.keys()
             logger.error("Missing required keys for creating port forward: %s", missing)
@@ -549,15 +549,13 @@ class FirewallManager:
             )
             response = await self._connection.request(api_request)
 
-            # V1 POST usually returns a list containing the created object within 'data'
+            # connection.request() unwraps the "data" envelope, so response
+            # is either a list (containing the created object) or a dict.
             created_rule = None
-            if (
-                isinstance(response, dict)
-                and "data" in response
-                and isinstance(response["data"], list)
-                and len(response["data"]) > 0
-            ):
-                created_rule = response["data"][0]
+            if isinstance(response, list) and len(response) > 0:
+                created_rule = response[0]
+            elif isinstance(response, dict) and response.get("_id"):
+                created_rule = response
             else:
                 logger.error("Unexpected response format creating port forward: %s", response)
                 return None

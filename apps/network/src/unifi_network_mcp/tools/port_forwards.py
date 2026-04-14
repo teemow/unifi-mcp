@@ -68,7 +68,7 @@ async def list_port_forwards() -> Dict[str, Any]:  # Removed context, adjusted r
                 "src_port": r.get("dst_port"),  # Note: UniFi uses dst_port for external
                 "dst_port": r.get("fwd_port"),  # Note: UniFi uses fwd_port for internal
                 "protocol": r.get("protocol"),
-                "dest_ip": r.get("fwd_ip"),
+                "dest_ip": r.get("fwd"),
             }
             for r in rules_raw
         ]
@@ -214,7 +214,7 @@ async def toggle_port_forward(
                 current_enabled=current_enabled,
                 additional_info={
                     "dst_port": rule.get("dst_port"),
-                    "fwd_ip": rule.get("fwd_ip"),
+                    "fwd": rule.get("fwd"),
                     "fwd_port": rule.get("fwd_port"),
                 },
             )
@@ -329,13 +329,13 @@ async def create_port_forward(
         return {"success": False, "error": error}
 
     try:
-        # Prepare data for the manager
+        # Prepare data for the manager -- map schema field names to UniFi API field names
         rule_data = {
             "name": validated_data["name"],
             "dst_port": validated_data["dst_port"],
             "fwd_port": validated_data["fwd_port"],
-            "fwd_ip": validated_data["fwd_ip"],
-            "proto": validated_data.get("protocol", "tcp_udp").replace("_", "/"),  # Manager expects 'tcp/udp'
+            "fwd": validated_data["fwd_ip"],
+            "proto": validated_data.get("protocol", "tcp_udp").replace("_", "/"),
             "protocol_match_excepted": False,
             "enabled": validated_data.get("enabled", True),
             "log": validated_data.get("log", False),
@@ -509,10 +509,10 @@ async def update_port_forward(
             updated_fields_list.append(key)
             if key == "protocol":
                 update_payload["proto"] = value.replace("_", "/")
+            elif key == "fwd_ip":
+                update_payload["fwd"] = value
             elif key == "src_ip":
-                # Map src_ip to 'src', handle removal if empty string/null
                 update_payload["src"] = value if value else None
-            # Need to handle 'log' if it's part of the schema/manager
             elif key == "log":
                 update_payload["log"] = value
             else:
@@ -604,13 +604,13 @@ async def create_simple_port_forward(
 
     r = validated
 
-    # Build API payload matching existing V1 schema keys
+    # Build API payload using UniFi API field names (fwd, proto)
     payload: Dict[str, Any] = {
         "name": r["name"],
         "dst_port": str(r["ext_port"]),
         "fwd_port": str(r.get("int_port", r["ext_port"])),
-        "fwd_ip": r["to_ip"],
-        "protocol": {
+        "fwd": r["to_ip"],
+        "proto": {
             "tcp": "tcp",
             "udp": "udp",
             "both": "tcp_udp",
