@@ -524,27 +524,28 @@ class FirewallManager:
             return False
 
     async def create_port_forward(self, rule_data: Dict[str, Any]) -> Optional[Dict]:
-        """Create a new port forwarding rule. Returns the created rule data dict or None.
+        """Create a new port forwarding rule.
 
         Args:
-            rule_data: Dictionary containing the rule configuration. Expected keys:
-                       name (str), dst_port (str), fwd_port (str), fwd (str),
-                       protocol (str, optional), enabled (bool, optional), etc.
+            rule_data: Dict with UniFi REST API field names. Required:
+                name, dst_port, fwd_port, fwd, proto, pfwd_interface.
+                Optional: src, log, enabled.
 
         Returns:
-            The created rule data dict, or None if creation failed.
+            The created rule data dict on success, or
+            {"error": "..."} dict on API error, or None on unexpected failure.
         """
-        required_keys = {"name", "dst_port", "fwd_port", "fwd"}
+        required_keys = {"name", "dst_port", "fwd_port", "fwd", "proto", "pfwd_interface"}
         if not required_keys.issubset(rule_data.keys()):
             missing = required_keys - rule_data.keys()
             logger.error("Missing required keys for creating port forward: %s", missing)
-            return None
+            return {"error": f"Missing required keys: {missing}"}
 
         try:
             logger.info("Attempting to create port forward rule '%s'", rule_data["name"])
             api_request = ApiRequest(
                 method="post",
-                path="/rest/portforward",  # V1 endpoint path, corrected
+                path="/rest/portforward",
                 data=rule_data,
             )
             response = await self._connection.request(api_request)
@@ -558,7 +559,7 @@ class FirewallManager:
                 created_rule = response
             else:
                 logger.error("Unexpected response format creating port forward: %s", response)
-                return None
+                return {"error": f"Unexpected response format: {response}"}
 
             cache_key = f"{CACHE_PREFIX_PORT_FORWARDS}_{self._connection.site}"
             self._connection._invalidate_cache(cache_key)
@@ -572,7 +573,7 @@ class FirewallManager:
                 e,
                 exc_info=True,
             )
-            return None
+            return {"error": str(e)}
 
     async def delete_port_forward(self, rule_id: str) -> bool:
         """Delete a port forwarding rule by ID.

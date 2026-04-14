@@ -329,19 +329,21 @@ async def create_port_forward(
         return {"success": False, "error": error}
 
     try:
-        # Prepare data for the manager -- map schema field names to UniFi API field names
+        # Build payload using UniFi REST API field names.
+        # Reference: POST /rest/portforward
+        #   required: name, dst_port, fwd, fwd_port, proto, pfwd_interface
+        #   optional: src, log, enabled
         rule_data = {
             "name": validated_data["name"],
             "dst_port": validated_data["dst_port"],
             "fwd_port": validated_data["fwd_port"],
             "fwd": validated_data["fwd_ip"],
             "proto": validated_data.get("protocol", "tcp_udp"),
+            "pfwd_interface": validated_data.get("pfwd_interface", "wan"),
+            "src": validated_data.get("src_ip", "any"),
+            "log": validated_data.get("log", False),
             "enabled": validated_data.get("enabled", True),
         }
-
-        # Handle optional source IP
-        if validated_data.get("src_ip"):
-            rule_data["src"] = validated_data["src_ip"]
 
         logger.info(
             "Attempting to create port forward: %s (%s %s -> %s:%s)",
@@ -354,26 +356,20 @@ async def create_port_forward(
 
         result = await firewall_manager.create_port_forward(rule_data)
 
-        if result:
-            new_rule_id = result if isinstance(result, str) else result.get("_id", "unknown")
-            details = result if isinstance(result, dict) else {"id": new_rule_id}
-            logger.info("Successfully created port forward '%s' with ID %s", validated_data["name"], new_rule_id)
+        if isinstance(result, dict) and result.get("_id"):
+            logger.info("Successfully created port forward '%s' with ID %s", validated_data["name"], result["_id"])
             return {
                 "success": True,
                 "message": f"Port forward '{validated_data['name']}' created successfully.",
-                "port_forward_id": new_rule_id,
-                "details": json.loads(json.dumps(details, default=str)),
+                "port_forward_id": result["_id"],
+                "details": json.loads(json.dumps(result, default=str)),
             }
         else:
-            error_msg = (
-                result.get("error", "Manager returned failure")
-                if isinstance(result, dict)
-                else "Manager returned failure"
-            )
+            error_msg = result.get("error", "Unknown failure") if isinstance(result, dict) else "Manager returned None"
             logger.error("Failed to create port forward '%s'. Reason: %s", validated_data["name"], error_msg)
             return {
                 "success": False,
-                "error": f"Failed to create port forward '{validated_data['name']}'. {error_msg}",
+                "error": f"Failed to create port forward '{validated_data['name']}': {error_msg}",
             }
 
     except Exception as e:
@@ -602,7 +598,8 @@ async def create_simple_port_forward(
 
     r = validated
 
-    # Build API payload using UniFi API field names (fwd, proto)
+    # Build payload using UniFi REST API field names.
+    # Reference: POST /rest/portforward
     payload: Dict[str, Any] = {
         "name": r["name"],
         "dst_port": str(r["ext_port"]),
@@ -613,6 +610,9 @@ async def create_simple_port_forward(
             "udp": "udp",
             "both": "tcp_udp",
         }.get(r.get("protocol", "both"), "tcp_udp"),
+        "pfwd_interface": "wan",
+        "src": "any",
+        "log": False,
         "enabled": r.get("enabled", True),
     }
 
@@ -624,14 +624,15 @@ async def create_simple_port_forward(
         }
 
     created = await firewall_manager.create_port_forward(payload)
-    if created is None or not isinstance(created, dict):
+    if not isinstance(created, dict) or not created.get("_id"):
+        error_msg = created.get("error", "Unknown failure") if isinstance(created, dict) else "Manager returned None"
         return {
             "success": False,
-            "error": "Controller rejected port forward creation. See logs.",
+            "error": f"Controller rejected port forward creation: {error_msg}",
         }
 
     return {
         "success": True,
-        "port_forward_id": created.get("_id"),
+        "port_forward_id": created["_id"],
         "details": json.loads(json.dumps(created, default=str)),
     }
