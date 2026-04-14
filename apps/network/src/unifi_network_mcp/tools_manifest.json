@@ -1,5 +1,5 @@
 {
-  "count": 167,
+  "count": 171,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -27,6 +27,7 @@
     "unifi_create_simple_qos_rule": "unifi_network_mcp.tools.qos",
     "unifi_create_usergroup": "unifi_network_mcp.tools.usergroups",
     "unifi_create_voucher": "unifi_network_mcp.tools.hotspot",
+    "unifi_create_wireguard_peer": "unifi_network_mcp.tools.vpn",
     "unifi_create_wlan": "unifi_network_mcp.tools.network",
     "unifi_delete_acl_rule": "unifi_network_mcp.tools.acl",
     "unifi_delete_ap_group": "unifi_network_mcp.tools.network",
@@ -38,6 +39,7 @@
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
     "unifi_delete_port_profile": "unifi_network_mcp.tools.switch",
+    "unifi_delete_wireguard_peer": "unifi_network_mcp.tools.vpn",
     "unifi_delete_wlan": "unifi_network_mcp.tools.network",
     "unifi_force_provision_device": "unifi_network_mcp.tools.devices",
     "unifi_force_reconnect_client": "unifi_network_mcp.tools.clients",
@@ -90,6 +92,7 @@
     "unifi_get_voucher_details": "unifi_network_mcp.tools.hotspot",
     "unifi_get_vpn_client_details": "unifi_network_mcp.tools.vpn",
     "unifi_get_vpn_server_details": "unifi_network_mcp.tools.vpn",
+    "unifi_get_wireguard_peer": "unifi_network_mcp.tools.vpn",
     "unifi_get_wlan_details": "unifi_network_mcp.tools.network",
     "unifi_list_acl_rules": "unifi_network_mcp.tools.acl",
     "unifi_list_active_routes": "unifi_network_mcp.tools.routing",
@@ -122,6 +125,7 @@
     "unifi_list_vouchers": "unifi_network_mcp.tools.hotspot",
     "unifi_list_vpn_clients": "unifi_network_mcp.tools.vpn",
     "unifi_list_vpn_servers": "unifi_network_mcp.tools.vpn",
+    "unifi_list_wireguard_peers": "unifi_network_mcp.tools.vpn",
     "unifi_list_wlans": "unifi_network_mcp.tools.network",
     "unifi_locate_device": "unifi_network_mcp.tools.devices",
     "unifi_lookup_by_ip": "unifi_network_mcp.tools.clients",
@@ -1081,6 +1085,41 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "description": "Create a new WireGuard peer on a WireGuard server. The UniFi controller generates the keypair and assigns an IP automatically. Requires confirmation. After creation the peer config (public key, assigned IP) is returned; private keys are redacted -- download the full client config from the UniFi UI.",
+      "name": "unifi_create_wireguard_peer",
+      "permission_action": "create",
+      "permission_category": "vpn_servers",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, creates the peer. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Display name for the peer (e.g. 'teemow-laptop', 'teemow-phone')",
+              "type": "string"
+            },
+            "server_id": {
+              "description": "WireGuard server _id to add the peer to (from unifi_list_vpn_servers)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "server_id",
+            "name"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a new Wireless LAN (WLAN/SSID) with schema validation. Requires confirmation.",
       "name": "unifi_create_wlan",
       "permission_action": "create",
@@ -1399,6 +1438,36 @@
           },
           "required": [
             "profile_id"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Delete a WireGuard peer by ID. Requires confirmation.",
+      "name": "unifi_delete_wireguard_peer",
+      "permission_action": "delete",
+      "permission_category": "vpn_servers",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the peer. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "peer_id": {
+              "description": "Unique identifier (_id) of the WireGuard peer to delete (from unifi_list_wireguard_peers)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "peer_id"
           ],
           "type": "object"
         }
@@ -2542,6 +2611,28 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "description": "Get details for a specific WireGuard peer by ID. Private keys are redacted.",
+      "name": "unifi_get_wireguard_peer",
+      "schema": {
+        "input": {
+          "properties": {
+            "peer_id": {
+              "description": "Unique identifier (_id) of the WireGuard peer (from unifi_list_wireguard_peers)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "peer_id"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get details for a specific WLAN by ID.",
       "name": "unifi_get_wlan_details",
       "schema": {
@@ -3086,6 +3177,25 @@
       "schema": {
         "input": {
           "properties": {},
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List WireGuard peers (VPN clients). Optionally filter by server_id to list peers for a specific WireGuard server. Returns peer name, ID, assigned IP, and public key. Private keys are redacted.",
+      "name": "unifi_list_wireguard_peers",
+      "schema": {
+        "input": {
+          "properties": {
+            "server_id": {
+              "description": "Optional WireGuard server _id to filter peers (from unifi_list_vpn_servers). If omitted, returns peers across all WireGuard servers.",
+              "type": "string"
+            }
+          },
           "type": "object"
         }
       }
