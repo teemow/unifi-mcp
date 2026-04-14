@@ -4,6 +4,9 @@ VPN configurations are stored in the networkconf API endpoint alongside regular
 networks. They're identified by the 'purpose' field (vpn-client, vpn-server,
 remote-user-vpn) and/or 'vpn_type' field (wireguard-client, openvpn-server, etc).
 
+WireGuard peers are managed via the /rest/wireguardpeer API endpoint, separate
+from the networkconf endpoint used for VPN server/client configurations.
+
 Note: UniFi is developing a dedicated VPN API but it's not yet complete.
 This implementation uses the networkconf endpoint which is the reliable approach.
 """
@@ -21,6 +24,24 @@ logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_VPN_CONFIGS = "vpn_configs"
 CACHE_PREFIX_NETWORKS = "networks"
+CACHE_PREFIX_WG_PEERS = "wg_peers"
+
+SENSITIVE_FIELDS = frozenset({
+    "x_wireguard_private_key",
+    "x_wireguard_preshared_key",
+    "x_openvpn_key",
+    "x_openvpn_ca",
+    "x_openvpn_cert",
+    "x_psk",
+})
+
+
+def redact_sensitive_fields(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of data with sensitive key material replaced by a placeholder."""
+    return {
+        k: "<REDACTED>" if k in SENSITIVE_FIELDS else v
+        for k, v in data.items()
+    }
 
 
 def is_vpn_network(network: Dict[str, Any]) -> bool:
@@ -152,6 +173,7 @@ class VpnManager:
                     )
 
             logger.debug("Found %s VPN configurations", len(vpn_configs))
+            vpn_configs = [redact_sensitive_fields(c) for c in vpn_configs]
             self._connection._update_cache(cache_key, vpn_configs)
             return vpn_configs
 
@@ -182,13 +204,14 @@ class VpnManager:
             client_id: ID of the VPN client to get details for
 
         Returns:
-            VPN client details if found, None otherwise
+            VPN client details (sensitive fields redacted) if found, None otherwise
         """
         vpn_clients = await self.get_vpn_clients()
         client = next((c for c in vpn_clients if c.get("_id") == client_id), None)
         if not client:
             logger.warning("VPN client %s not found", client_id)
-        return client
+            return None
+        return redact_sensitive_fields(client)
 
     async def get_vpn_server_details(self, server_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed information for a specific VPN server.
@@ -197,13 +220,14 @@ class VpnManager:
             server_id: ID of the VPN server to get details for
 
         Returns:
-            VPN server details if found, None otherwise
+            VPN server details (sensitive fields redacted) if found, None otherwise
         """
         vpn_servers = await self.get_vpn_servers()
         server = next((s for s in vpn_servers if s.get("_id") == server_id), None)
         if not server:
             logger.warning("VPN server %s not found", server_id)
-        return server
+            return None
+        return redact_sensitive_fields(server)
 
     async def _update_vpn_config(self, config_id: str, update_data: Dict[str, Any]) -> bool:
         """Update a VPN configuration.
@@ -306,3 +330,146 @@ class VpnManager:
 
         new_state = not config.get("enabled", True)
         return await self._update_vpn_config(config_id, {"enabled": new_state})
+
+    # ------------------------------------------------------------------
+    # WireGuard peer management
+    # ------------------------------------------------------------------
+
+    async def list_wireguard_peers(self, server_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List WireGuard peers, optionally filtered by server ID.
+
+        Args:
+            server_id: If provided, only return peers belonging to this server.
+
+        Returns:
+            List of peer dictionaries with sensitive fields redacted.
+        """
+        cache_key = f"{CACHE_PREFIX_WG_PEERS}_{self._connection.site}_{server_id or 'all'}"
+        cached = self._connection.get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            api_request = ApiRequest(method="get", path="/rest/wireguardpeer")
+            response = await self._connection.request(api_request)
+
+            if isinstance(response, dict) and "data" in response:
+                peers = response["data"]
+            elif isinstance(response, list):
+                peers = response
+            else:
+                logger.warning("Unexpected wireguardpeer response format: %s", type(response))
+                peers = []
+
+            if server_id:
+                peers = [p for p in peers if p.get("wireguard_server_id") == server_id]
+
+            peers = [redact_sensitive_fields(p) for p in peers]
+            self._connection._update_cache(cache_key, peers)
+            return peers
+
+        except Exception as e:
+            logger.error("Error listing WireGuard peers: %s", e)
+            return []
+
+    async def get_wireguard_peer(self, peer_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single WireGuard peer by ID.
+
+        Returns:
+            Peer dict with sensitive fields redacted, or None.
+        """
+        try:
+            api_request = ApiRequest(method="get", path=f"/rest/wireguardpeer/{peer_id}")
+            response = await self._connection.request(api_request)
+
+            if isinstance(response, dict) and "data" in response:
+                items = response["data"]
+            elif isinstance(response, list):
+                items = response
+            else:
+                items = [response] if isinstance(response, dict) else []
+
+            if not items:
+                return None
+            return redact_sensitive_fields(items[0])
+
+        except Exception as e:
+            logger.error("Error getting WireGuard peer %s: %s", peer_id, e)
+            return None
+
+    async def create_wireguard_peer(self, server_id: str, name: str) -> Optional[Dict[str, Any]]:
+        """Create a new WireGuard peer on a server.
+
+        The UniFi controller generates the keypair and assigns an IP from
+        the server's DHCP range automatically.
+
+        Args:
+            server_id: _id of the WireGuard server (from list_vpn_servers).
+            name: Display name for the peer (e.g. 'teemow-laptop').
+
+        Returns:
+            The created peer dict (with sensitive fields redacted) or None on failure.
+        """
+        server = await self.get_vpn_server_details(server_id)
+        if not server:
+            logger.error("WireGuard server %s not found", server_id)
+            return None
+        if server.get("vpn_type") != "wireguard-server":
+            logger.error("Server %s is not a WireGuard server (type=%s)", server_id, server.get("vpn_type"))
+            return None
+
+        payload = {
+            "name": name,
+            "wireguard_server_id": server_id,
+        }
+
+        try:
+            api_request = ApiRequest(
+                method="post",
+                path="/rest/wireguardpeer",
+                data=payload,
+            )
+            response = await self._connection.request(api_request)
+
+            if isinstance(response, dict) and "data" in response:
+                items = response["data"]
+            elif isinstance(response, list):
+                items = response
+            else:
+                items = [response] if isinstance(response, dict) else []
+
+            self._invalidate_peer_cache()
+
+            if not items:
+                logger.error("Empty response when creating WireGuard peer")
+                return None
+
+            peer = items[0]
+            logger.info("Created WireGuard peer '%s' (id=%s) on server %s", name, peer.get("_id"), server_id)
+            return redact_sensitive_fields(peer)
+
+        except Exception as e:
+            logger.error("Error creating WireGuard peer '%s': %s", name, e)
+            return None
+
+    async def delete_wireguard_peer(self, peer_id: str) -> bool:
+        """Delete a WireGuard peer.
+
+        Args:
+            peer_id: _id of the peer to delete.
+
+        Returns:
+            True if deleted successfully.
+        """
+        try:
+            api_request = ApiRequest(method="delete", path=f"/rest/wireguardpeer/{peer_id}")
+            await self._connection.request(api_request)
+            self._invalidate_peer_cache()
+            logger.info("Deleted WireGuard peer %s", peer_id)
+            return True
+        except Exception as e:
+            logger.error("Error deleting WireGuard peer %s: %s", peer_id, e)
+            return False
+
+    def _invalidate_peer_cache(self) -> None:
+        self._connection._invalidate_cache(f"{CACHE_PREFIX_WG_PEERS}_{self._connection.site}")
