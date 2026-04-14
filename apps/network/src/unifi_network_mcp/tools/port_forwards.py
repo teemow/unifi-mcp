@@ -335,10 +335,8 @@ async def create_port_forward(
             "dst_port": validated_data["dst_port"],
             "fwd_port": validated_data["fwd_port"],
             "fwd": validated_data["fwd_ip"],
-            "proto": validated_data.get("protocol", "tcp_udp").replace("_", "/"),
-            "protocol_match_excepted": False,
+            "proto": validated_data.get("protocol", "tcp_udp"),
             "enabled": validated_data.get("enabled", True),
-            "log": validated_data.get("log", False),
         }
 
         # Handle optional source IP
@@ -508,7 +506,7 @@ async def update_port_forward(
         for key, value in validated_data.items():
             updated_fields_list.append(key)
             if key == "protocol":
-                update_payload["proto"] = value.replace("_", "/")
+                update_payload["proto"] = value
             elif key == "fwd_ip":
                 update_payload["fwd"] = value
             elif key == "src_ip":
