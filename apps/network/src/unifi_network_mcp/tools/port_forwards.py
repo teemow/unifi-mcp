@@ -9,7 +9,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_mcp_shared.confirmation import toggle_preview, update_preview
+from unifi_mcp_shared.confirmation import preview_response, toggle_preview, update_preview
 from unifi_network_mcp.runtime import firewall_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added for validation
 
@@ -636,3 +636,65 @@ async def create_simple_port_forward(
         "port_forward_id": created["_id"],
         "details": json.loads(json.dumps(created, default=str)),
     }
+
+
+@server.tool(
+    name="unifi_delete_port_forward",
+    description="Delete a port forwarding rule by ID. Requires confirmation.",
+    permission_category="port_forwards",
+    permission_action="delete",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def delete_port_forward(
+    port_forward_id: Annotated[
+        str,
+        Field(description="Unique identifier (_id) of the port forwarding rule to delete (from unifi_list_port_forwards)"),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, deletes the rule. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Delete a port forwarding rule. Requires confirmation."""
+    try:
+        if not port_forward_id:
+            return {"success": False, "error": "port_forward_id is required"}
+
+        rule_obj = await firewall_manager.get_port_forward_by_id(port_forward_id)
+        rule = rule_obj.raw if (rule_obj and hasattr(rule_obj, "raw")) else rule_obj
+        if not rule:
+            return {"success": False, "error": f"Port forwarding rule '{port_forward_id}' not found"}
+
+        rule_name = rule.get("name", port_forward_id)
+
+        if not confirm:
+            return preview_response(
+                action="delete",
+                resource_type="port_forward",
+                resource_id=port_forward_id,
+                resource_name=rule_name,
+                current_state={
+                    "name": rule_name,
+                    "dst_port": rule.get("dst_port"),
+                    "fwd": rule.get("fwd"),
+                    "fwd_port": rule.get("fwd_port"),
+                    "proto": rule.get("proto"),
+                    "enabled": rule.get("enabled"),
+                },
+                proposed_changes={"action": "permanently delete this port forward rule"},
+                warnings=["This action cannot be undone."],
+            )
+
+        success = await firewall_manager.delete_port_forward(port_forward_id)
+        if success:
+            return {
+                "success": True,
+                "message": f"Port forward '{rule_name}' ({port_forward_id}) deleted.",
+            }
+        return {
+            "success": False,
+            "error": f"Failed to delete port forward '{rule_name}'. Check server logs.",
+        }
+    except Exception as e:
+        logger.error("Error deleting port forward %s: %s", port_forward_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete port forward {port_forward_id}: {e}"}
