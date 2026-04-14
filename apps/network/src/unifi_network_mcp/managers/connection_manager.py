@@ -182,7 +182,7 @@ async def detect_unifi_os_proactively(
         - Tries UniFi OS endpoint first (newer controllers)
         - Falls back to standard endpoint if UniFi OS fails
         - Returns None if both fail (timeout, network error, etc.)
-        - Per FR-012: If both succeed, prefers direct (returns False)
+        - If both succeed, prefers UniFi OS proxy paths (returns True)
     """
     client_timeout = aiohttp.ClientTimeout(total=timeout)
 
@@ -195,9 +195,11 @@ async def detect_unifi_os_proactively(
 
     # Determine result based on probe outcomes
     if unifi_os_result and standard_result:
-        # FR-012: Both succeed, prefer direct (standard)
-        logger.info("Both endpoints succeeded - preferring standard (direct) paths")
-        return False
+        # If the proxy endpoint works, this IS a UniFi OS device. The standard
+        # endpoint may also respond but write operations (PUT/POST/DELETE) require
+        # the /proxy/network/ prefix on UniFi OS.
+        logger.info("Both endpoints succeeded - preferring UniFi OS (proxy) paths")
+        return True
     elif unifi_os_result:
         logger.info("Detected UniFi OS controller (proxy paths required)")
         return True

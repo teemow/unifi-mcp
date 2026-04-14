@@ -103,15 +103,17 @@ class TestPathDetection:
             assert result is None, "Should return None when both endpoints fail"
 
     @pytest.mark.asyncio
-    async def test_both_paths_succeed_prefers_direct(self):
-        """Test that when both paths succeed, detection prefers direct (FR-012).
+    async def test_both_paths_succeed_prefers_proxy(self):
+        """Test that when both paths succeed, detection prefers UniFi OS proxy.
 
-        FR-012: If both paths succeed (ambiguous), system MUST prefer direct paths
+        If the /proxy/network/ endpoint works, the device is a UniFi OS device.
+        Write operations require the proxy prefix even if direct paths respond
+        to GET requests.
 
         Scenario:
         - Both UniFi OS and standard endpoints return 200 with valid JSON
 
-        Expected: detect_unifi_os_proactively() returns False (prefers direct)
+        Expected: detect_unifi_os_proactively() returns True (prefers proxy)
         """
         base_url = "https://192.168.1.1:443"
 
@@ -132,7 +134,7 @@ class TestPathDetection:
             async with aiohttp.ClientSession() as session:
                 result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
 
-            assert result is False, "Should prefer direct path when both succeed (FR-012)"
+            assert result is True, "Should prefer proxy path when both succeed (UniFi OS)"
 
     @pytest.mark.asyncio
     async def test_detection_timeout_handling(self):
