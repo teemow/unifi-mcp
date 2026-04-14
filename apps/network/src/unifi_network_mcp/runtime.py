@@ -47,6 +47,7 @@ from unifi_network_mcp.managers.switch_manager import SwitchManager
 from unifi_network_mcp.managers.system_manager import SystemManager
 from unifi_network_mcp.managers.traffic_route_manager import TrafficRouteManager
 from unifi_network_mcp.managers.usergroup_manager import UsergroupManager
+from unifi_network_mcp.managers.ddns_manager import DdnsManager
 from unifi_network_mcp.managers.vpn_manager import VpnManager
 from unifi_network_mcp.tool_index import TOOL_REGISTRY
 
@@ -179,6 +180,11 @@ def get_content_filter_manager() -> ContentFilterManager:
 
 
 @lru_cache
+def get_ddns_manager() -> DdnsManager:
+    return DdnsManager(get_connection_manager())
+
+
+@lru_cache
 def get_dns_manager() -> DnsManager:
     return DnsManager(get_connection_manager())
 
@@ -279,6 +285,7 @@ acl_manager = get_acl_manager()
 client_group_manager = get_client_group_manager()
 client_manager = get_client_manager()
 content_filter_manager = get_content_filter_manager()
+ddns_manager = get_ddns_manager()
 dns_manager = get_dns_manager()
 dpi_manager = get_dpi_manager()
 device_manager = get_device_manager()

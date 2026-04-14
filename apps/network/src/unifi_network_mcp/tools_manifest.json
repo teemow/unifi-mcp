@@ -1,5 +1,5 @@
 {
-  "count": 171,
+  "count": 177,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -13,6 +13,7 @@
     "unifi_create_ap_group": "unifi_network_mcp.tools.network",
     "unifi_create_backup": "unifi_network_mcp.tools.system",
     "unifi_create_client_group": "unifi_network_mcp.tools.client_groups",
+    "unifi_create_ddns": "unifi_network_mcp.tools.ddns",
     "unifi_create_dns_record": "unifi_network_mcp.tools.dns",
     "unifi_create_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_create_firewall_policy": "unifi_network_mcp.tools.firewall",
@@ -34,6 +35,7 @@
     "unifi_delete_backup": "unifi_network_mcp.tools.system",
     "unifi_delete_client_group": "unifi_network_mcp.tools.client_groups",
     "unifi_delete_content_filter": "unifi_network_mcp.tools.content_filtering",
+    "unifi_delete_ddns": "unifi_network_mcp.tools.ddns",
     "unifi_delete_dns_record": "unifi_network_mcp.tools.dns",
     "unifi_delete_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
@@ -60,6 +62,7 @@
     "unifi_get_device_details": "unifi_network_mcp.tools.devices",
     "unifi_get_device_radio": "unifi_network_mcp.tools.devices",
     "unifi_get_device_stats": "unifi_network_mcp.tools.stats",
+    "unifi_get_ddns_details": "unifi_network_mcp.tools.ddns",
     "unifi_get_dns_record_details": "unifi_network_mcp.tools.dns",
     "unifi_get_dpi_stats": "unifi_network_mcp.tools.stats",
     "unifi_get_event_types": "unifi_network_mcp.tools.events",
@@ -105,6 +108,7 @@
     "unifi_list_clients": "unifi_network_mcp.tools.clients",
     "unifi_list_content_filters": "unifi_network_mcp.tools.content_filtering",
     "unifi_list_devices": "unifi_network_mcp.tools.devices",
+    "unifi_list_ddns": "unifi_network_mcp.tools.ddns",
     "unifi_list_dns_records": "unifi_network_mcp.tools.dns",
     "unifi_list_dpi_applications": "unifi_network_mcp.tools.dpi",
     "unifi_list_dpi_categories": "unifi_network_mcp.tools.dpi",
@@ -156,6 +160,8 @@
     "unifi_update_client_group": "unifi_network_mcp.tools.client_groups",
     "unifi_update_content_filter": "unifi_network_mcp.tools.content_filtering",
     "unifi_update_device_radio": "unifi_network_mcp.tools.devices",
+    "unifi_update_ddns": "unifi_network_mcp.tools.ddns",
+    "unifi_update_ddns_state": "unifi_network_mcp.tools.ddns",
     "unifi_update_dns_record": "unifi_network_mcp.tools.dns",
     "unifi_update_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_update_firewall_policy": "unifi_network_mcp.tools.firewall",
@@ -545,6 +551,63 @@
           "required": [
             "name",
             "members"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Create a new Dynamic DNS configuration. Required: service (provider name, e.g. 'cloudflare', 'dyndns', 'noip'), host_name (FQDN to update, e.g. 'vpn.home.example.com'), login (username or email for the DDNS provider), x_password (API token or password for the DDNS provider). Optional: interface (WAN interface, e.g. 'wan', 'wan2'), server (custom API endpoint), enabled (bool, default true). Requires confirmation.",
+      "name": "unifi_create_ddns",
+      "permission_action": "create",
+      "permission_category": "ddns",
+      "schema": {
+        "input": {
+          "properties": {
+            "service": {
+              "description": "DDNS provider name (e.g. 'cloudflare', 'dyndns', 'noip', 'freedns', 'namecheap')",
+              "type": "string"
+            },
+            "host_name": {
+              "description": "Fully qualified domain name to update (e.g. 'vpn.home.example.com')",
+              "type": "string"
+            },
+            "login": {
+              "description": "Username or email for the DDNS service",
+              "type": "string"
+            },
+            "x_password": {
+              "description": "API token or password for the DDNS service",
+              "type": "string"
+            },
+            "interface": {
+              "description": "WAN interface to bind to (e.g. 'wan', 'wan2', 'wan3'). Omit for default WAN.",
+              "type": "string"
+            },
+            "custom_server": {
+              "description": "Custom API server/endpoint for the DDNS provider. Usually not needed.",
+              "type": "string"
+            },
+            "enabled": {
+              "description": "Whether the DDNS entry should be enabled (default true)",
+              "type": "boolean"
+            },
+            "confirm": {
+              "description": "When true, creates the entry. When false (default), returns a preview",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "service",
+            "host_name",
+            "login",
+            "x_password"
           ],
           "type": "object"
         }
@@ -1300,6 +1363,36 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "description": "Delete a Dynamic DNS configuration. Use unifi_list_ddns to find IDs. Requires confirmation.",
+      "name": "unifi_delete_ddns",
+      "permission_action": "delete",
+      "permission_category": "ddns",
+      "schema": {
+        "input": {
+          "properties": {
+            "config_id": {
+              "description": "The ID of the DDNS configuration to delete (from unifi_list_ddns)",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, deletes the entry. When false (default), returns a preview",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "config_id"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Delete a static DNS record. Use unifi_list_dns_records to find record IDs. Requires confirmation.",
       "name": "unifi_delete_dns_record",
       "permission_action": "delete",
@@ -1947,6 +2040,28 @@
           },
           "required": [
             "device_id"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Get full details for a specific Dynamic DNS configuration by ID. Credentials are redacted.",
+      "name": "unifi_get_ddns_details",
+      "schema": {
+        "input": {
+          "properties": {
+            "config_id": {
+              "description": "Unique identifier (_id) of the DDNS configuration (from unifi_list_ddns)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "config_id"
           ],
           "type": "object"
         }
@@ -2840,6 +2955,20 @@
               "type": "string"
             }
           },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List all Dynamic DNS configurations. Returns service provider, hostname, interface, and enabled state for each entry. Credentials are redacted.",
+      "name": "unifi_list_ddns",
+      "schema": {
+        "input": {
+          "properties": {},
           "type": "object"
         }
       }
@@ -4196,6 +4325,72 @@
           "required": [
             "mac_address",
             "radio"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Update an existing Dynamic DNS configuration. Pass only the fields you want to change -- current values are preserved. Updatable fields: service (str), host_name (str), login (str), x_password (str), interface (str), server (str), enabled (bool). Requires confirmation.",
+      "name": "unifi_update_ddns",
+      "permission_action": "update",
+      "permission_category": "ddns",
+      "schema": {
+        "input": {
+          "properties": {
+            "config_id": {
+              "description": "The ID of the DDNS configuration to update (from unifi_list_ddns)",
+              "type": "string"
+            },
+            "update_data": {
+              "description": "Dictionary of fields to update. See tool description for supported fields.",
+              "type": "object"
+            },
+            "confirm": {
+              "description": "When true, applies the update. When false (default), returns a preview",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "config_id",
+            "update_data"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Enable or disable a specific Dynamic DNS configuration by ID.",
+      "name": "unifi_update_ddns_state",
+      "permission_action": "update",
+      "permission_category": "ddns",
+      "schema": {
+        "input": {
+          "properties": {
+            "config_id": {
+              "description": "Unique identifier (_id) of the DDNS configuration to update (from unifi_list_ddns)",
+              "type": "string"
+            },
+            "enabled": {
+              "description": "Set to true to enable the DDNS entry, false to disable it",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "config_id",
+            "enabled"
           ],
           "type": "object"
         }
